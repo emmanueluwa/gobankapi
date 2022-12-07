@@ -3,11 +3,11 @@ package main
 import "math/rand"
 
 type Account struct {
-	ID         int
-	FirstName  string
-	LastName   string
-	CardNumber int64
-	Balance    int64
+	ID         int    `json:"id"`
+	FirstName  string `json:"firstName"`
+	LastName   string `json:"lastName"`
+	CardNumber int64  `json:"cardNumber"`
+	Balance    int64  `json:"balance"`
 }
 
 func NewAccount(firstName, lastName string) *Account {
