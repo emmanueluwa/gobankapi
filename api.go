@@ -9,38 +9,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// writing json for the API
-func WriteJSON(writer http.ResponseWriter, status int, value any) error {
-	writer.WriteHeader(status)
-	writer.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(writer).Encode(value)
-}
-
-// function sig we wish to use
-type apiFunc func(http.ResponseWriter, *http.Request) error
-
-// type for API errors
-type ApiError struct {
-	Error string
-}
-
-// help decorate apifunc into the handlefunctions we wish to use
-func makeHTTPHandlerFunc(function apiFunc) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		if err := function(writer, request); err != nil {
-			//handle error
-			WriteJSON(writer, http.StatusBadRequest, ApiError{Error: err.Error()})
-		}
-	}
-}
-
 type APIServer struct {
 	listenAddress string
+	store         Storage
 }
 
-func NewAPIServer(listenAddress string) *APIServer {
+func NewAPIServer(listenAddress string, store Storage) *APIServer {
 	return &APIServer{
 		listenAddress: listenAddress,
+		store:         store,
 	}
 }
 
@@ -82,6 +59,7 @@ func (server *APIServer) handleGetAccount(writer http.ResponseWriter, request *h
 }
 
 func (server *APIServer) handleCreateAccount(writer http.ResponseWriter, request *http.Request) error {
+
 	return nil
 }
 
@@ -91,4 +69,31 @@ func (server *APIServer) handleDeleteAccount(writer http.ResponseWriter, request
 
 func (server *APIServer) handleTransfer(writer http.ResponseWriter, request *http.Request) error {
 	return nil
+}
+
+//helper functions...
+
+// writing json for the API
+func WriteJSON(writer http.ResponseWriter, status int, value any) error {
+	writer.Header().Add("Content-Type", "application/json")
+	writer.WriteHeader(status)
+	return json.NewEncoder(writer).Encode(value)
+}
+
+// function sig we wish to use
+type apiFunc func(http.ResponseWriter, *http.Request) error
+
+// type for API errors
+type ApiError struct {
+	Error string
+}
+
+// help decorate apifunc into the handlefunctions we wish to use
+func makeHTTPHandlerFunc(function apiFunc) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if err := function(writer, request); err != nil {
+			//handle error
+			WriteJSON(writer, http.StatusBadRequest, ApiError{Error: err.Error()})
+		}
+	}
 }
