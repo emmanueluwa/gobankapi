@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -29,7 +30,7 @@ func (server *APIServer) Run() {
 
 	router.HandleFunc("/account/{id}", makeHTTPHandlerFunc(server.handleGetAccountByID))
 
-	log.Println("JSON API seerver running on port: ", server.listenAddress)
+	log.Println("JSON API server running on port: ", server.listenAddress)
 	http.ListenAndServe(server.listenAddress, router)
 }
 
@@ -59,12 +60,19 @@ func (server *APIServer) handleGetAccount(writer http.ResponseWriter, request *h
 }
 
 func (server *APIServer) handleGetAccountByID(writer http.ResponseWriter, request *http.Request) error {
-	id := mux.Vars(request)["id"]
+	// the id comes as a string and needs to be converted
+	idString := mux.Vars(request)["id"]
+	id, err := strconv.Atoi(idString)
+	if err != nil {
+		return fmt.Errorf("invalid id %s", idString)
+	}
 
-	fmt.Println(id)
+	account, err := server.store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
 
-	// account := NewAccount("Wise", "O")
-	return WriteJSON(writer, http.StatusOK, &Account{})
+	return WriteJSON(writer, http.StatusOK, account)
 }
 
 func (server *APIServer) handleCreateAccount(writer http.ResponseWriter, request *http.Request) error {
@@ -104,7 +112,7 @@ type apiFunc func(http.ResponseWriter, *http.Request) error
 
 // type for API errors
 type ApiError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 // help decorate apifunc into the handlefunctions we wish to use
