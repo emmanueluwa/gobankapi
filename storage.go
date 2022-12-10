@@ -77,7 +77,9 @@ func (store *PostgresStorage) UpdateAccount(*Account) error {
 }
 
 func (store *PostgresStorage) DeleteAccount(id int) error {
-	return nil
+	//for production, soft delete is best practice
+	_, err := store.db.Query("delete from account where id = $1", id)
+	return err
 }
 
 func (store *PostgresStorage) GetAccountByID(id int) (*Account, error) {
