@@ -30,6 +30,9 @@ func (server *APIServer) Run() {
 
 	router.HandleFunc("/account/{id}", makeHTTPHandlerFunc(server.handleGetAccountByID))
 
+	//using post request instead of get, to reduce exposure of account number in browser history/webserver logs
+	router.HandleFunc("/transfer", makeHTTPHandlerFunc(server.handleTransfer))
+
 	log.Println("JSON API server running on port: ", server.listenAddress)
 	http.ListenAndServe(server.listenAddress, router)
 }
@@ -109,7 +112,13 @@ func (server *APIServer) handleDeleteAccount(writer http.ResponseWriter, request
 }
 
 func (server *APIServer) handleTransfer(writer http.ResponseWriter, request *http.Request) error {
-	return nil
+	transferRequest := new(TransferRequest)
+	if err := json.NewDecoder(request.Body).Decode(transferRequest); err != nil {
+		return err
+	}
+	defer request.Body.Close()
+
+	return WriteJSON(writer, http.StatusOK, transferRequest)
 }
 
 //helper functions...
