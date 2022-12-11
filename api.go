@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	jwt "github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
@@ -30,7 +31,7 @@ func (server *APIServer) Run() {
 
 	router.HandleFunc("/account", makeHTTPHandlerFunc(server.handleAccount))
 
-	router.HandleFunc("/account/{id}", WithJWTAuth(makeHTTPHandlerFunc(server.handleGetAccountByID)))
+	router.HandleFunc("/account/{id}", WithJWTAuth(makeHTTPHandlerFunc(server.handleGetAccountByID), server.store))
 
 	//using post request instead of get, to reduce exposure of account number in browser history/webserver logs
 	router.HandleFunc("/transfer", makeHTTPHandlerFunc(server.handleTransfer))
@@ -96,6 +97,14 @@ func (server *APIServer) handleCreateAccount(writer http.ResponseWriter, request
 		return err
 	}
 
+	//generate jwt token
+	tokenString, err := createJWT(account)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("JWT token: ", tokenString)
+
 	return WriteJSON(writer, http.StatusOK, account)
 }
 
@@ -135,19 +144,61 @@ helper functions...
 func WriteJSON(writer http.ResponseWriter, status int, value any) error {
 	writer.Header().Add("Content-Type", "application/json")
 	writer.WriteHeader(status)
+
 	return json.NewEncoder(writer).Encode(value)
 }
 
-func WithJWTAuth(handlerFunc http.HandlerFunc) http.HandlerFunc {
+func createJWT(account *Account) (string, error) {
+	// Create the Claims
+	claims := &jwt.MapClaims{
+		"ExpiresAt":     jwt.NewNumericDate(time.Unix(1516239022, 0)),
+		"accountNumber": account.Number,
+	}
+
+	secret := os.Getenv("JWT_SECRET")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	//convert string to byte
+	return token.SignedString([]byte(secret))
+}
+
+func accessDenied(writer http.ResponseWriter) {
+	WriteJSON(writer, http.StatusForbidden, ApiError{Error: "access denied"})
+}
+
+func WithJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 
 	return func(writer http.ResponseWriter, request *http.Request) {
 		fmt.Println("Calling JWT auth middleware")
 
 		tokenString := request.Header.Get("x-jwt-token")
 
-		_, err := validateJWT(tokenString)
+		token, err := validateJWT(tokenString)
 		if err != nil {
-			WriteJSON(writer, http.StatusForbidden, ApiError{Error: "invalid token"})
+			accessDenied(writer)
+			return
+		}
+		if !token.Valid {
+			accessDenied(writer)
+			return
+		}
+
+		userID, err := getID(request)
+		if err != nil {
+			accessDenied(writer)
+			return
+		}
+		account, err := store.GetAccountByID(userID)
+		//never return errors that give hints on what to do(hackers), use logs to assist debugging
+		if err != nil {
+			accessDenied(writer)
+			return
+		}
+		claims := token.Claims.(jwt.MapClaims)
+		// panic(reflect.TypeOf(claims["accountNumber"])) --->> prints float64
+		// use own claims instead of default to avoid having to hack desired result
+		if account.Number != int64(claims["accountNumber"].(float64)) {
+			accessDenied(writer)
 			return
 		}
 
